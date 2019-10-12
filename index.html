@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Game on html5</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        background-color: #111;
+        color: white;
+        padding: 0;
+        margin: 0;
+      }
+
+      .container {
+        position: relative;
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        overflow: hidden;
+      }
+
+      .player {
+        position: absolute;
+        width: 20px;
+        height: 35px;
+        z-index: 50;
+      }
+
+      .player .head {
+        width: 75%;
+        height: 42.8571%;
+        background-color: white;
+        margin: auto;
+      }
+
+      .player .head .eye {
+        display: flex;
+        width: 75%;
+        height: 100%;
+        margin: auto;
+        justify-content: center;
+      }
+
+      .player--running-left .head .eye {
+        display: flex;
+        width: 50%;
+        height: 100%;
+        margin-left: 10%;
+        justify-content: center;
+      }
+
+      .player--running-right .head .eye {
+        display: flex;
+        width: 50%;
+        height: 100%;
+        margin-right: 10%;
+        justify-content: center;
+      }
+
+      .player .head .l-eye {
+        width: 15%;
+        height: 55%;
+        background-color: black;
+        margin-right: 20%;
+      }
+
+      .player .head .r-eye {
+        width: 15%;
+        height: 55%;
+        background-color: black;
+        margin-left: 20%;
+      }
+
+      .player .head .l-eye:before {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 25%;
+        background-color: white;
+      }
+
+      .player .head .r-eye:before {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 25%;
+        background-color: white;
+      }
+
+      .player .body {
+        width: 40%;
+        height: 42.8571%;
+        background-color: white;
+        margin: auto;
+      }
+
+      .player .leg {
+        display: flex;
+        width: 40%;
+        height: 100%;
+        margin: auto;
+      }
+
+      .player .leg .l-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-right: auto;
+      }
+
+      @keyframes l-leg-running {
+        0% {
+          transform: rotate(45deg);
+        }
+        25% {
+          transform: rotate(0deg);
+        }
+        50% {
+          transform: rotate(-45deg);
+        }
+        75% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(45deg);
+        }
+      }
+
+      @keyframes r-leg-running {
+        0% {
+          transform: rotate(-45deg);
+        }
+        25% {
+          transform: rotate(0deg);
+        }
+        50% {
+          transform: rotate(45deg);
+        }
+        75% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(-45deg);
+        }
+      }
+
+      .player--running-left .leg .l-leg,
+      .player--running-right .leg .l-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-right: auto;
+        transform-origin: top center;
+        animation-name: l-leg-running;
+        animation-duration: 0.5s;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+      }
+
+      .player .leg .r-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-left: auto;
+      }
+
+      .player--running-left .leg .r-leg,
+      .player--running-right .leg .r-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-right: auto;
+        transform-origin: top center;
+        animation-name: r-leg-running;
+        animation-duration: 0.5s;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+      }
+
+      .ground {
+        position: absolute;
+        border: none;
+        background-color: white;
+      }
+
+      .debugger-logger {
+        width: 80%;
+        height: 20%;
+        border: 1px solid white;
+      }
+
+      .debugger-logger textarea {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="player">
+        <div class="head">
+          <div class="eye">
+            <div class="l-eye"></div>
+            <div class="r-eye"></div>
+          </div>
+        </div>
+        <div class="body"></div>
+        <div class="leg">
+          <div class="l-leg"></div>
+          <div class="r-leg"></div>
+        </div>
+      </div>
+    </div>
+    <!--<div class="debugger-logger">
+      <textarea class="logger"></textarea>
+    </div>-->
+    <script>
+      const player = document.querySelector(".player");
+      const playArea = document.querySelector(".container");
+      const loggerArea = document.querySelector("textarea.logger");
+      let logDump = [];
+      let lasttime = 0;
+      const FPS = 60;
+      const gravity = 0.98;
+      let firstTime = true;
+      const collisionLines = [];
+
+      const logger = {
+        dateToString: function() {
+          const d = new Date();
+          const zp = (str, max = 2) =>
+            (new Array(max).fill("0").join("") + str).slice(-max);
+          return `${zp(d.getFullYear(), 4)}-${zp(d.getMonth() + 1)}-${zp(
+            d.getDate()
+          )} ${zp(d.getHours())}:${zp(d.getMinutes())}:${zp(
+            d.getSeconds()
+          )}.${d.getMilliseconds()}`;
+        },
+        log: function(str) {
+          if (str === "") return;
+          logDump.reverse();
+          logDump.push("[" + logger.dateToString() + "] " + str);
+          logDump.reverse();
+          //loggerArea.value = logDump.join("\n");
+          console.log("[" + logger.dateToString() + "] " + str);
+        },
+        clear: function() {
+          logDump = [];
+        }
+      };
+
+      function gameObject(initState) {
+        this.props = {
+          ...{
+            x: 0,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            ax: 0,
+            ay: 0,
+            width: 20,
+            height: 35,
+            gx: 0.3
+          },
+          ...initState
+        };
+      }
+      gameObject.prototype.setPosition = function(x, y) {
+        if (x !== undefined) this.props.x = x;
+        if (y !== undefined) this.props.y = y;
+        player.style.left = this.props.x + "px";
+        player.style.top = this.props.y + "px";
+      };
+      gameObject.prototype.getPosition = function() {
+        return {
+          x: player.style.left.replace(/px/g, "") * 1,
+          y: player.style.top.replace(/px/g, "") * 1
+        };
+      };
+      gameObject.prototype.toString = function() {
+        return JSON.stringify(this.props.getPosition());
+      };
+      gameObject.prototype.update = function(deltaTime = 1) {
+        const { x, y, vx, vy, width: w, height: h } = this.props;
+        this.props.x += this.props.vx;
+        this.props.y += this.props.vy;
+        this.props.vx += this.props.ax;
+        this.props.vy += this.props.ay;
+        let collideX = false;
+        let collideY = false;
+        let speedX = this.props.vx;
+        speedX = speedX < 0 ? speedX * -1 : speedX;
+        if (speedX < 0.01) {
+          this.props.vx = 0;
+        }
+
+        for (const line of collisionLines) {
+          const minY = line[0][1] > line[1][1] ? line[1][1] : line[0][1];
+          const maxY = line[0][1] < line[1][1] ? line[1][1] : line[0][1];
+          const minX = line[0][0] > line[1][0] ? line[1][0] : line[0][0];
+          const maxX = line[0][0] < line[1][0] ? line[1][0] : line[0][0];
+          let boxW = maxX - minX;
+          let boxH = maxY - minY;
+          boxW = boxW < 0 ? -boxW : boxW;
+          boxH = boxH < 0 ? -boxH : boxH;
+          //x軸について
+          if (
+            !collideX &&
+            boxH > 0 &&
+            ((minY < y && y < maxY) || (minY < y + h && y + h < maxY))
+          ) {
+            if (
+              minX >= x + w &&
+              this.props.x + w >= maxX &&
+              this.props.vx >= 0
+            ) {
+              this.props.x = minX - w;
+              this.props.vx = 0;
+              collideX = true;
+            }
+            if (minX <= x && this.props.x <= maxX && this.props.vx < 0) {
+              this.props.x = minX;
+              this.props.vx = 0;
+              collideX = true;
+            }
+          }
+          //y軸について
+          if (
+            !collideY &&
+            boxW > 0 &&
+            ((minX < x && x < maxX) || (minX < x + w && x + w < maxX))
+          ) {
+            if (
+              minY >= y + h &&
+              this.props.y + h >= maxY &&
+              this.props.vy >= 0
+            ) {
+              this.props.y = minY - h;
+              this.props.vy = 0;
+              this.props.vx -= this.props.vx * this.props.gx;
+              this.props.jumping = false;
+              collideY = true;
+            } else if (minY <= y && this.props.y <= maxY && this.props.vy < 0) {
+              this.props.y = minY;
+              this.props.vy = 0;
+              this.props.vx -= this.props.vx * this.props.gx;
+              this.props.jumping = true;
+              collideY = true;
+            } else {
+              this.props.jumping = true;
+            }
+          }
+        }
+      };
+
+      (function() {
+        let playerObject;
+        let keyCode = [];
+        document.onkeydown = function(event) {
+          const indexOfKey = keyCode.findIndex(x => x.key === event.keyCode);
+          if (indexOfKey >= 0) {
+            keyCode[indexOfKey].value = true;
+          } else {
+            keyCode.push({
+              key: event.keyCode,
+              value: true
+            });
+          }
+        };
+        document.onkeyup = function(event) {
+          const indexOfKey = keyCode.findIndex(x => x.key === event.keyCode);
+          if (indexOfKey >= 0) {
+            keyCode[indexOfKey].value = false;
+          } else {
+            keyCode.push({
+              key: event.keyCode,
+              value: false
+            });
+          }
+        };
+
+        function isKeyDown(code) {
+          const indexOfKey = keyCode.findIndex(x => x.key === code);
+          if (indexOfKey < 0) return false;
+          else {
+            return keyCode[indexOfKey].value;
+          }
+        }
+
+        function main() {
+          let mainLoop = window.requestAnimationFrame(main);
+          //render
+          if (lasttime === 0) {
+            lasttime = Date.now();
+          }
+          if (Date.now() - lasttime >= 1000 / FPS) {
+            if (firstTime) {
+              firstTime = false;
+              if (!init()) {
+                window.cancelAnimationFrame(mainLoop);
+                return;
+              }
+            }
+            update((Date.now() - lasttime) / (1000 / FPS));
+            lasttime = Date.now();
+          }
+        }
+        function init() {
+          playerObject = new gameObject({
+            x: 500,
+            y: 0,
+            vx: 0,
+            ay: gravity,
+            gx: 0.2,
+            width: 20,
+            height: 35,
+            jumping: false
+          });
+
+          const ground = [
+            [0, 700],
+            [1600, 1200],
+            [400, 600],
+            [600, 1200],
+            [0, 0],
+            [10, 1200],
+            [1590, 0],
+            [1600, 1200]
+          ];
+
+          if (ground.length % 2 !== 0) {
+            logger.log("Ground NG");
+            return false;
+          }
+          logger.log("Ground OK");
+
+          for (let i = 0; i < ground.length; i += 2) {
+            const [tl, br] = ground.slice(i, i + 2);
+            logger.log(tl);
+            logger.log(br);
+            const groundElement = document.createElement("div");
+            groundElement.classList.add("ground");
+            groundElement.style.left = tl[0] + "px";
+            groundElement.style.top = tl[1] + "px";
+            groundElement.style.width = br[0] - tl[0] + "px";
+            groundElement.style.height = br[1] - tl[1] + "px";
+            playArea.appendChild(groundElement);
+            collisionLines.push([[tl[0], tl[1]], [br[0], tl[1]]]);
+            collisionLines.push([[br[0], tl[1]], [br[0], br[1]]]);
+            collisionLines.push([[br[0], br[1]], [tl[0], br[1]]]);
+            collisionLines.push([[tl[0], br[1]], [tl[0], tl[1]]]);
+          }
+
+          return true;
+        }
+
+        function update(deltaTime) {
+          let moveX = false;
+          player.classList.remove("player--running-left");
+          player.classList.remove("player--running-right");
+          if (isKeyDown(37) && !playerObject.props.jumping) {
+            //left arrow
+            moveX = true;
+            playerObject.props.ax = -1;
+
+            if (!player.classList.contains("player--running-left"))
+              player.classList.add("player--running-left");
+          }
+          if (isKeyDown(38) || isKeyDown(32)) {
+            //up arrow or space
+            if (!playerObject.props.jumping) {
+              playerObject.props.vy = -15;
+              playerObject.props.jumping = true;
+            }
+          }
+          if (isKeyDown(39) && !playerObject.props.jumping) {
+            //right arrow
+            moveX = true;
+            playerObject.props.ax = 1;
+            if (!player.classList.contains("player--running-right"))
+              player.classList.add("player--running-right");
+          }
+          if (!isKeyDown(37) && !isKeyDown(39)) {
+            moveX = false;
+          }
+          if (isKeyDown(40)) {
+            //down arrow
+          }
+          if (playerObject.props.jumping) {
+            playerObject.props.ax = 0;
+          }
+          if (!moveX && !playerObject.props.jumping) {
+            playerObject.props.ax = 0;
+          }
+          playerObject.update(deltaTime);
+          playerObject.setPosition();
+        }
+        main();
+      })();
+    </script>
+  </body>
+</html>
