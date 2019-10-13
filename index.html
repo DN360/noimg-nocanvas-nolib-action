@@ -24,8 +24,8 @@
 
       .player {
         position: absolute;
-        width: 20px;
-        height: 35px;
+        width: 40px;
+        height: 70px;
         z-index: 50;
       }
 
@@ -44,7 +44,8 @@
         justify-content: center;
       }
 
-      .player--running-left .head .eye {
+      .player--running-left .head .eye,
+      .player--jumping-left .head .eye {
         display: flex;
         width: 50%;
         height: 100%;
@@ -52,7 +53,8 @@
         justify-content: center;
       }
 
-      .player--running-right .head .eye {
+      .player--running-right .head .eye,
+      .player--jumping-right .head .eye {
         display: flex;
         width: 50%;
         height: 100%;
@@ -155,9 +157,19 @@
         margin-right: auto;
         transform-origin: top center;
         animation-name: l-leg-running;
-        animation-duration: 0.5s;
+        animation-duration: 0.3s;
         animation-timing-function: linear;
         animation-iteration-count: infinite;
+      }
+
+      .player--jumping-left .leg .l-leg,
+      .player--jumping-right .leg .l-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-right: auto;
+        transform-origin: top center;
+        transform: rotate(45deg);
       }
 
       .player .leg .r-leg {
@@ -175,9 +187,19 @@
         margin-right: auto;
         transform-origin: top center;
         animation-name: r-leg-running;
-        animation-duration: 0.5s;
+        animation-duration: 0.3s;
         animation-timing-function: linear;
         animation-iteration-count: infinite;
+      }
+
+      .player--jumping-left .leg .r-leg,
+      .player--jumping-right .leg .r-leg {
+        width: 35%;
+        height: 14.2857%;
+        background-color: white;
+        margin-right: auto;
+        transform-origin: top center;
+        transform: rotate(-45deg);
       }
 
       .ground {
@@ -224,7 +246,7 @@
       const loggerArea = document.querySelector("textarea.logger");
       let logDump = [];
       let lasttime = 0;
-      const FPS = 60;
+      const FPS = 120;
       const gravity = 0.98;
       let firstTime = true;
       const collisionLines = [];
@@ -262,12 +284,15 @@
             vy: 0,
             ax: 0,
             ay: 0,
-            width: 20,
-            height: 35,
-            gx: 0.3
+            width: window.getComputedStyle(player).width.replace(/px/g, "") * 1,
+            height:
+              window.getComputedStyle(player).height.replace(/px/g, "") * 1,
+            ag: 0.3
           },
           ...initState
         };
+        player.style.width = this.props.width + "px";
+        player.style.height = this.props.height + "px";
       }
       gameObject.prototype.setPosition = function(x, y) {
         if (x !== undefined) this.props.x = x;
@@ -278,21 +303,27 @@
       gameObject.prototype.getPosition = function() {
         return {
           x: player.style.left.replace(/px/g, "") * 1,
-          y: player.style.top.replace(/px/g, "") * 1
+          y: player.style.top.replace(/px/g, "") * 1,
+          vx: this.props.vx * 1,
+          vy: this.props.vy * 1,
+          ax: this.props.ax * 1,
+          ay: this.props.ay * 1
         };
       };
       gameObject.prototype.toString = function() {
-        return JSON.stringify(this.props.getPosition());
+        return JSON.stringify(this.getPosition());
       };
       gameObject.prototype.update = function(deltaTime = 1) {
-        const { x, y, vx, vy, width: w, height: h } = this.props;
-        this.props.x += this.props.vx;
-        this.props.y += this.props.vy;
-        this.props.vx += this.props.ax;
-        this.props.vy += this.props.ay;
+        const { x, y, vx, vy, width: w, height: h, cw, ch } = this.props;
+        this.props.x += this.props.vx * deltaTime;
+        this.props.y += this.props.vy * deltaTime;
+        this.props.vx += this.props.ax * deltaTime;
+        this.props.vy += this.props.ay * deltaTime;
         let collideX = false;
         let collideY = false;
         let speedX = this.props.vx;
+        this.props.vx -= this.props.vx * this.props.ag;
+        this.props.vy -= this.props.vy * this.props.ag;
         speedX = speedX < 0 ? speedX * -1 : speedX;
         if (speedX < 0.01) {
           this.props.vx = 0;
@@ -307,23 +338,32 @@
           let boxH = maxY - minY;
           boxW = boxW < 0 ? -boxW : boxW;
           boxH = boxH < 0 ? -boxH : boxH;
+          const mx = (w * (1 - cw)) / 2;
+          const my = (h * (1 - ch)) / 2;
           //x軸について
           if (
             !collideX &&
             boxH > 0 &&
-            ((minY < y && y < maxY) || (minY < y + h && y + h < maxY))
+            ((minY < y + my && y + my < maxY) ||
+              (minY < y + h - my && y + h - my < maxY))
           ) {
+            //右端
             if (
-              minX >= x + w &&
-              this.props.x + w >= maxX &&
+              minX >= x + w - mx &&
+              this.props.x + w - mx >= maxX &&
               this.props.vx >= 0
             ) {
-              this.props.x = minX - w;
+              this.props.x = minX - w + mx;
               this.props.vx = 0;
               collideX = true;
             }
-            if (minX <= x && this.props.x <= maxX && this.props.vx < 0) {
-              this.props.x = minX;
+            //左端
+            else if (
+              minX <= x + mx &&
+              this.props.x + mx <= maxX &&
+              this.props.vx < 0
+            ) {
+              this.props.x = minX - mx;
               this.props.vx = 0;
               collideX = true;
             }
@@ -332,28 +372,40 @@
           if (
             !collideY &&
             boxW > 0 &&
-            ((minX < x && x < maxX) || (minX < x + w && x + w < maxX))
+            ((minX < x + mx && x + mx < maxX) ||
+              (minX < x + w - mx && x + w - mx < maxX))
           ) {
+            //下端
             if (
-              minY >= y + h &&
-              this.props.y + h >= maxY &&
+              minY >= y + h - my &&
+              this.props.y + h - my >= maxY &&
               this.props.vy >= 0
             ) {
-              this.props.y = minY - h;
+              this.props.y = minY - h + my;
               this.props.vy = 0;
               this.props.vx -= this.props.vx * this.props.gx;
               this.props.jumping = false;
               collideY = true;
-            } else if (minY <= y && this.props.y <= maxY && this.props.vy < 0) {
-              this.props.y = minY;
+            }
+            //上端
+            else if (
+              minY <= y + my &&
+              this.props.y + my <= maxY &&
+              this.props.vy < 0
+            ) {
+              this.props.y = minY - my;
               this.props.vy = 0;
-              this.props.vx -= this.props.vx * this.props.gx;
               this.props.jumping = true;
               collideY = true;
             } else {
               this.props.jumping = true;
             }
           }
+        }
+
+        if (this.props.jumping) {
+          this.props.ax = 0;
+          if (this.props.vx > 0 || this.props.vx < 0) this.props.vx = vx;
         }
       };
 
@@ -363,17 +415,20 @@
         document.onkeydown = function(event) {
           const indexOfKey = keyCode.findIndex(x => x.key === event.keyCode);
           if (indexOfKey >= 0) {
+            keyCode[indexOfKey].pulse = keyCode[indexOfKey].value === false;
             keyCode[indexOfKey].value = true;
           } else {
             keyCode.push({
               key: event.keyCode,
-              value: true
+              value: true,
+              pulse: true
             });
           }
         };
         document.onkeyup = function(event) {
           const indexOfKey = keyCode.findIndex(x => x.key === event.keyCode);
           if (indexOfKey >= 0) {
+            keyCode[indexOfKey].pulse = false;
             keyCode[indexOfKey].value = false;
           } else {
             keyCode.push({
@@ -388,6 +443,16 @@
           if (indexOfKey < 0) return false;
           else {
             return keyCode[indexOfKey].value;
+          }
+        }
+
+        function isKeyPulse(code) {
+          const indexOfKey = keyCode.findIndex(x => x.key === code);
+          if (indexOfKey < 0) return false;
+          else {
+            const returnValue = keyCode[indexOfKey].pulse;
+            keyCode[indexOfKey].pulse = false;
+            return returnValue;
           }
         }
 
@@ -411,26 +476,34 @@
         }
         function init() {
           playerObject = new gameObject({
-            x: 500,
-            y: 0,
+            x: 100,
+            y: 400,
             vx: 0,
             ay: gravity,
-            gx: 0.2,
+            ag: 0.1,
+            gx: 0.5,
+            cw: 0.4,
+            ch: 1.0,
             width: 20,
             height: 35,
+            speed: 2,
+            jump: 15,
             jumping: false
           });
 
           const ground = [
-            [0, 500],
-            [600, 600],
-            [200, 400],
-            [400, 600],
             [0, 0],
-            [10, 600],
-            [590, 0],
-            [600, 600]
+            [30, 630],
+            [630, 0],
+            [660, 660],
+            [0, 0],
+            [630, 30],
+            [0, 630],
+            [630, 660]
           ];
+
+          ground.push([300, 560]);
+          ground.push([400, 630]);
 
           if (ground.length % 2 !== 0) {
             logger.log("Ground NG");
@@ -462,25 +535,27 @@
           let moveX = false;
           player.classList.remove("player--running-left");
           player.classList.remove("player--running-right");
+          player.classList.remove("player--jumping-left");
+          player.classList.remove("player--jumping-right");
           if (isKeyDown(37) && !playerObject.props.jumping) {
             //left arrow
             moveX = true;
-            playerObject.props.ax = -1;
+            playerObject.props.ax = -playerObject.props.speed;
 
             if (!player.classList.contains("player--running-left"))
               player.classList.add("player--running-left");
           }
-          if (isKeyDown(38) || isKeyDown(32)) {
+          if (isKeyPulse(38) || isKeyPulse(32)) {
             //up arrow or space
             if (!playerObject.props.jumping) {
-              playerObject.props.vy = -15;
+              playerObject.props.vy = -playerObject.props.jump;
               playerObject.props.jumping = true;
             }
           }
           if (isKeyDown(39) && !playerObject.props.jumping) {
             //right arrow
             moveX = true;
-            playerObject.props.ax = 1;
+            playerObject.props.ax = playerObject.props.speed;
             if (!player.classList.contains("player--running-right"))
               player.classList.add("player--running-right");
           }
@@ -492,6 +567,13 @@
           }
           if (playerObject.props.jumping) {
             playerObject.props.ax = 0;
+            if (playerObject.props.vx > 0) {
+              if (!player.classList.contains("player--jumping-right"))
+                player.classList.add("player--jumping-right");
+            } else if (playerObject.props.vx < 0) {
+              if (!player.classList.contains("player--jumping-left"))
+                player.classList.add("player--jumping-left");
+            }
           }
           if (!moveX && !playerObject.props.jumping) {
             playerObject.props.ax = 0;
